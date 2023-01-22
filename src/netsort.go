@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -116,7 +115,7 @@ func receiveData(conn net.Conn, othersData chan<- record) {
 				log.Fatalf("conn Read failed - Fatal error: %s %v", err.Error(), serId)
 				continue
 			}
-			fmt.Println(serId, " Bytes read ", n)
+			// fmt.Println(serId, " Bytes read ", n)
 			bytesToRead += n
 			data = append(data, buf[:n]...)
 			if bytesToRead >= 101 {
@@ -129,17 +128,17 @@ func receiveData(conn net.Conn, othersData chan<- record) {
 		stream_complete := (data[0] == 1)
 		// fmt.Println(serId, " stream complete value ", stream_complete, data[0])
 		if !stream_complete {
-			fmt.Println("data length", len(data), len(buf), bytesToRead)
+			// fmt.Println("data length", len(data), len(buf), bytesToRead)
 			copy(key[:], data[1:11])
 			copy(value[:], data[11:101])
 			rec := record{key, value}
 			// fmt.Println(serId, " stream not complete ", key, value)
 			othersData <- rec
 		} else {
-			fmt.Println(serId, " stream complete")
+			// fmt.Println(serId, " stream complete")
 			// Close channel
 			close(othersData)
-			fmt.Println(serId, " Channel closed")
+			// fmt.Println(serId, " Channel closed")
 			break
 		}
 	}
@@ -212,7 +211,7 @@ func main() {
 		_, err := inputFile.Read(key[:])
 		if err != nil {
 			if err == io.EOF {
-				fmt.Println(serId," Reached end of file while reading key")
+				// fmt.Println(serId," Reached end of file while reading key")
 				break
 			}
 			log.Println(err)
@@ -221,7 +220,7 @@ func main() {
 		_, err = inputFile.Read(value[:])
 		if err != nil {
 			if err == io.EOF {
-				fmt.Println(serId, " Reached end of file while reading value")
+				// fmt.Println(serId, " Reached end of file while reading value")
 				break
 			}
 			log.Println(err)
@@ -307,7 +306,7 @@ func main() {
 		}
 		return false
 	})
-	fmt.Println(serId, "records sorted");
+	// fmt.Println(serId, "records sorted");
 	// Write to output file
 
 	// Read write file name
