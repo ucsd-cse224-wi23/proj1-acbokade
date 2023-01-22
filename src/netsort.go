@@ -62,7 +62,7 @@ func getIPAddress(host string, port string) string {
 }
 
 func connectToSocket(addr string) (net.Conn, error) {
-	waitTime := time.Duration(50) // in ms
+	waitTime := time.Duration(250) // in ms
 	// fmt.Println(serId, " Connecting to socket ", addr)
 	for {
 		conn, err := net.Dial(PROT, addr)
@@ -226,7 +226,9 @@ func main() {
 			}
 			log.Println(err)
 		}
-		keyToServerMapping, _ := strconv.Atoi(string(key[:nMSB]))
+		// keyToServerMapping, _ := strconv.Atoi(string(key[:nMSB]))
+		firstByte := key[0]
+		keyToServerMapping := int(firstByte) >> (8 - nMSB)
 		// fmt.Println(serId, " keyToServerMapping ", keyToServerMapping)
 		if keyToServerMapping == serverId {
 			records = append(records, record{key, value})
