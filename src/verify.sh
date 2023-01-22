@@ -1,4 +1,10 @@
-N=7
+rm -rf testcases/testcase1/output-*.dat
+rm INPUT 
+rm OUTPUT 
+rm REF_OUTPUT
+rm my_output
+./run-demo-4.sh
+N=3
 cp testcases/testcase1/input-0.dat INPUT 
 for i in $(seq 1 ${N})
 do

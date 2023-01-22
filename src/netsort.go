@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -62,7 +61,7 @@ func getIPAddress(host string, port string) string {
 }
 
 func connectToSocket(addr string) (net.Conn, error) {
-	waitTime := time.Duration(100) // in ms
+	waitTime := time.Duration(50) // in ms
 	for {
 		conn, err := net.Dial(PROT, addr)
 		// checkError(err)
@@ -97,7 +96,6 @@ func receiveData(conn net.Conn, othersData chan<- record) {
 		var key [10]byte
 		var value [90]byte
 		// // Read stream_complete boolean
-		// _, err := conn.Read(stream_complete)
 		// checkError(err)
 		
 		var bytes_to_Read int = 0
@@ -144,11 +142,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Invalid serverId, must be an int %v", err)
 	}
-	fmt.Println("My server Id:", serverId)
 
 	// Read server configs from file
 	scs := readServerConfigs(os.Args[4])
-	fmt.Println("Got the following server configs:", scs)
 
 	// Read the port and address of own server
 	myPort := scs.Servers[serverId].Port
@@ -157,29 +153,16 @@ func main() {
 	/*
 		Implement Distributed Sort
 	*/
-
 	/*
 		Step 1: Create a mesh of TCP socket connections
 	*/
 	// Create a listener socket so that others can connect to
-	// othersData := make(chan record)
 	listener, err := net.Listen(PROT, addr)
 	// checkError(err)
 	if err != nil {
 		log.Fatalf("Net listen fail - Fatal error: %s", err.Error())
 	}
 	go acceptConnections(listener)
-
-	// Connect to every other socket
-	// for i := 0; i < len(scs.Servers); i++ {
-	// 	if i == serverId {
-	// 		continue
-	// 	}
-	// 	connPortId := scs.Servers[i].Port
-	// 	connService := (connPortId)
-	// 	conn, _ := connectToSocket(connService)
-
-	// }
 
 	// Read input data and send to others
 	inputFileName := os.Args[2]
@@ -226,8 +209,6 @@ func main() {
 			checkError(err)
 			openConnections[keyToServerMapping] = conn
 		}
-		// Create record object with key and value
-		// rec := record{key, value}
 		// Write 1 byte boolean
 		var streamComplete byte = 0
 		_, err = conn.Write([]byte{streamComplete})
@@ -251,7 +232,7 @@ func main() {
 		}
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1000 * time.Millisecond)
 	for _, conn := range openConnections {
 		var key [10]byte
 		var value [90]byte

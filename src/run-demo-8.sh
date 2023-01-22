@@ -11,6 +11,7 @@ go build -o netsort netsort.go
 for i in $(seq 0 7)
 do
   SERVER_ID=$i
+  echo $SERVER_ID
   INPUT_FILE_PATH='testcases/testcase1/input-'${SERVER_ID}'.dat'
   OUTPUT_FILE_PATH='testcases/testcase1/output-'${SERVER_ID}'.dat'
   CONFIG_FILE_PATH='testcases/testcase1/config.yaml'
