@@ -191,7 +191,7 @@ func main() {
 	nMSB := int(math.Log2(float64(nServers)))
 	openConnections := make(map[int]net.Conn)
 	// Establish connection with each other server
-	for i := 0; i < 8; i++ {
+	for i := 0; i < nServers; i++ {
 		if (i == serverId) {
 			continue
 		}
