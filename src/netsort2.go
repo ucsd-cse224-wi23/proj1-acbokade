@@ -62,7 +62,8 @@ func getIPAddress(host string, port string) string {
 }
 
 func connectToSocket(addr string) (net.Conn, error) {
-	waitTime := time.Duration(100) // in ms
+	waitTime := time.Duration(50) // in ms
+	fmt.Println(serId, " Connecting to socket ", addr)
 	for {
 		conn, err := net.Dial(PROT, addr)
 		// checkError(err)
@@ -70,6 +71,7 @@ func connectToSocket(addr string) (net.Conn, error) {
 			log.Fatalf("Connect to socket failed - Fatal error: %s", err.Error())
 		}
 		if err == nil {
+			fmt.Println(serId, " Connection to socket successful")
 			return conn, nil
 		}
 		time.Sleep(waitTime)
@@ -84,8 +86,10 @@ func acceptConnections(listener net.Listener) {
 			log.Fatalf("Accept connections failed - Fatal error: %s", err.Error())
 		}
 		if err == nil {
+			fmt.Println(serId, " Connection accepted ", conn)
 			ch := make(chan record)
 			othersDataChannel = append(othersDataChannel, ch)
+			fmt.Println(serId, "added channel current length", len(othersDataChannel), time.Now())
 			// Create a channel for the client
 			go receiveData(conn, ch)
 		}
@@ -93,6 +97,7 @@ func acceptConnections(listener net.Listener) {
 }
 
 func receiveData(conn net.Conn, othersData chan<- record) {
+	fmt.Println(serId, " Receive data in progress ", conn)
 	for {
 		var key [10]byte
 		var value [90]byte
@@ -107,25 +112,33 @@ func receiveData(conn net.Conn, othersData chan<- record) {
 			buf = make([]byte, 101)
 			data = make([]byte, 0)
 			n, err := conn.Read(buf)
+			fmt.Println(serId, " partial buf data", buf)
 			// checkError(err)
 			if err != nil {
 				log.Fatalf("conn Read failed - Fatal error: %s", err.Error())
 			}
+			fmt.Println(serId, " Bytes read ", n)
 			bytes_to_Read += n
 			data = append(data, buf[:n]...)
 			if bytes_to_Read >= 101 {
 				break
 			}
 		}
+		fmt.Println(serId, " buf content", buf)
+		fmt.Println(serId, " data content", data)
 		stream_complete := (data[0] == 1)
+		fmt.Println(serId, " stream complete value ", stream_complete, data[0])
 		if !stream_complete {
 			copy(key[:], data[1:11])
 			copy(value[:], data[11:101])
+			fmt.Println(serId, " stream not complete ", key, value)
 			rec := record{key, value}
 			othersData <- rec
 		} else {
+			fmt.Println(serId, " stream complete")
 			// Close channel
 			close(othersData)
+			fmt.Println(serId, " Channel closed")
 			break
 		}
 	}
@@ -199,6 +212,7 @@ func main() {
 		_, err := inputFile.Read(key[:])
 		if err != nil {
 			if err == io.EOF {
+				fmt.Println(serId," Reached end of file while reading key")
 				break
 			}
 			log.Println(err)
@@ -207,29 +221,38 @@ func main() {
 		_, err = inputFile.Read(value[:])
 		if err != nil {
 			if err == io.EOF {
+				fmt.Println(serId, " Reached end of file while reading value")
 				break
 			}
 			log.Println(err)
 		}
+		// fmt.Println(serId, " Read from file", key, value)
 		keyToServerMapping, _ := strconv.Atoi(string(key[:nMSB]))
+		fmt.Println(serId, " keyToServerMapping ", keyToServerMapping)
 		if keyToServerMapping == serverId {
 			records = append(records, record{key, value})
 			continue
 		}
 		conn, connExists := openConnections[keyToServerMapping]
 		if !connExists && keyToServerMapping != serverId {
+			fmt.Println(serId, " First time connection")
 			// Send the record to the server
 			peerPort := scs.Servers[keyToServerMapping].Port
 			peerAddr := scs.Servers[keyToServerMapping].Host
 			addr := getIPAddress(peerAddr, peerPort)
 			conn, err = connectToSocket(addr)
+			fmt.Println(serId, " * conn", conn)
 			checkError(err)
 			openConnections[keyToServerMapping] = conn
+		}
+		if connExists {
+			fmt.Println(serId, " Connection already exists")
 		}
 		// Create record object with key and value
 		// rec := record{key, value}
 		// Write 1 byte boolean
 		var streamComplete byte = 0
+		fmt.Println(serId, " conn", conn)
 		_, err = conn.Write([]byte{streamComplete})
 		// checkError(err)
 		if err != nil {
@@ -249,9 +272,12 @@ func main() {
 		if err != nil {
 			log.Fatalf("Fail writing conn.write value Fatal error: %s", err.Error())
 		}
+		fmt.Println(serId, "Sent 101 bytes")
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	fmt.Println(serId, " Finished reading records in the file")
+	time.Sleep(400 * time.Millisecond)
+	fmt.Println(serId, " closing openConnections total - ", len(openConnections))
 	for _, conn := range openConnections {
 		var key [10]byte
 		var value [90]byte
@@ -265,10 +291,18 @@ func main() {
 		_, err = conn.Write([]byte(value[:]))
 		conn.Close()
 	}
+	fmt.Println(serId, " connections closed")
+
+	// for rec := range othersData {
+	// 	fmt.Println(serId, " othersData read", rec)
+	// 	records = append(records, rec)
+	// }
+	fmt.Println(serId, "size of channel array ", len(othersDataChannel), time.Now())
 	for i := 0; i < len(othersDataChannel); i++ {
 		for rec := range othersDataChannel[i] {
 			records = append(records, rec)
 		}
+		fmt.Println(serId, " Completed reading channel ", i)
 	}
 	
 	// Close input file
@@ -284,12 +318,14 @@ func main() {
 		}
 		return false
 	})
+	fmt.Println(serId, "records sorted");
 	// Write to output file
 
 	// Read write file name
 	writeFileName := os.Args[3]
 	// Create output file
 	outputFile, err := os.Create(writeFileName)
+	fmt.Println(serId, writeFileName)
 	if err != nil {
 		log.Fatalf("Error creating output file - %v", err)
 	}

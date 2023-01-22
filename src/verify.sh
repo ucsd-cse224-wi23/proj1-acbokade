@@ -1,4 +1,4 @@
-N=1
+N=7
 cp testcases/testcase1/input-0.dat INPUT 
 for i in $(seq 1 ${N})
 do
