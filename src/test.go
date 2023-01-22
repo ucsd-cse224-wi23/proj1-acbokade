@@ -1,7 +1,6 @@
 package main
 
 import (
-	// "fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -12,6 +11,7 @@ import (
 	"io"
 	"bytes"
 	"sort"
+	"binary"
 
 	"gopkg.in/yaml.v2"
 )
@@ -63,15 +63,13 @@ func getIPAddress(host string, port string) string {
 
 func connectToSocket(addr string) (net.Conn, error) {
 	waitTime := time.Duration(50) // in ms
-	// fmt.Println(serId, " Connecting to socket ", addr)
 	for {
 		conn, err := net.Dial(PROT, addr)
 		// checkError(err)
 		if err != nil {
-			log.Fatalf("Connect to socket failed - Fatal error: %s %v", err.Error(), serId)
+			log.Fatalf("Connect to socket failed - Fatal error: %s", err.Error())
 		}
 		if err == nil {
-			// fmt.Println(serId, " Connection to socket successful")
 			return conn, nil
 		}
 		time.Sleep(waitTime)
@@ -86,8 +84,7 @@ func acceptConnections(listener net.Listener) {
 			log.Fatalf("Accept connections failed - Fatal error: %s", err.Error())
 		}
 		if err == nil {
-			// fmt.Println(serId, " Connection accepted ", conn)
-			ch := make(chan record)
+			ch := make(chan int)
 			othersDataChannel = append(othersDataChannel, ch)
 			// Create a channel for the client
 			go receiveData(conn, ch)
@@ -95,51 +92,37 @@ func acceptConnections(listener net.Listener) {
 	}
 }
 
-func receiveData(conn net.Conn, othersData chan<- record) {
-	// fmt.Println(serId, " Receive data in progress ", conn)
+func receiveData(conn net.Conn, othersData chan<- int) {
 	for {
-		var key [10]byte
-		var value [90]byte
+		var key1 int
+		// var key2 int
 		// // Read stream_complete boolean
 		// checkError(err)
 		
-		var bytesToRead int = 0
+		var bytes_to_Read int = 0
 		var buf[] byte
 		var data[] byte
-		data = make([]byte, 0)
 		for {
-			buf = make([]byte, 101 - bytesToRead)
+			buf = make([]byte, 4)
+			data = make([]byte, 0)
 			n, err := conn.Read(buf)
-			// fmt.Println(serId, " value of n ", n, len(buf))
 			// checkError(err)
 			if err != nil {
-				log.Fatalf("conn Read failed - Fatal error: %s %v", err.Error(), serId)
-				continue
+				log.Fatalf("conn Read failed - Fatal error: %s", err.Error())
 			}
-			// fmt.Println(serId, " Bytes read ", n)
-			bytesToRead += n
+			bytes_to_Read += n
 			data = append(data, buf[:n]...)
-			if bytesToRead >= 101 {
-				// fmt.Println("bytes Read at the end ", bytesToRead)
+			if bytes_to_Read >= 5 {
 				break
 			}
 		}
-		// fmt.Println(serId, " buf content", buf)
-		// fmt.Println(serId, " data content", data)
 		stream_complete := (data[0] == 1)
-		// fmt.Println(serId, " stream complete value ", stream_complete, data[0])
 		if !stream_complete {
-			// fmt.Println("data length", len(data), len(buf), bytesToRead)
-			copy(key[:], data[1:11])
-			copy(value[:], data[11:101])
-			rec := record{key, value}
-			// fmt.Println(serId, " stream not complete ", key, value)
-			othersData <- rec
+			binary.Read(bytes.NewReader(data[1:5]), binary.LittleEndian, &key1)
+			othersData <- key1
 		} else {
-			// fmt.Println(serId, " stream complete")
 			// Close channel
 			close(othersData)
-			// fmt.Println(serId, " Channel closed")
 			break
 		}
 	}
@@ -179,7 +162,6 @@ func main() {
 		log.Fatalf("Net listen fail - Fatal error: %s", err.Error())
 	}
 	go acceptConnections(listener)
-	time.Sleep(1000 * time.Millisecond)
 
 	// Read input data and send to others
 	inputFileName := os.Args[2]
@@ -191,7 +173,7 @@ func main() {
 	nMSB := int(math.Log2(float64(nServers)))
 	openConnections := make(map[int]net.Conn)
 	// Establish connection with each other server
-	for i := 0; i < 8; i++ {
+	for i := 0; i < nServers; i++ {
 		if (i == serverId) {
 			continue
 		}
@@ -202,39 +184,25 @@ func main() {
 		checkError(err)
 		openConnections[i] = conn
 	}
-
 	// Declare records array which will store individual record
 	records := []record{} 
 	for {
-		var key [10]byte
-		var value [90]byte
+		var key [4]byte
 		// Read first 10 bytes into key
 		_, err := inputFile.Read(key[:])
 		if err != nil {
 			if err == io.EOF {
-				// fmt.Println(serId," Reached end of file while reading key")
-				break
-			}
-			log.Println(err)
-		}
-		// Read the next 90 bytes into value
-		_, err = inputFile.Read(value[:])
-		if err != nil {
-			if err == io.EOF {
-				// fmt.Println(serId, " Reached end of file while reading value")
 				break
 			}
 			log.Println(err)
 		}
 		keyToServerMapping, _ := strconv.Atoi(string(key[:nMSB]))
-		// fmt.Println(serId, " keyToServerMapping ", keyToServerMapping)
 		if keyToServerMapping == serverId {
 			records = append(records, record{key, value})
 			continue
 		}
 		conn, connExists := openConnections[keyToServerMapping]
 		if !connExists && keyToServerMapping != serverId {
-			// fmt.Println(serId, " First time connection")
 			// Send the record to the server
 			peerPort := scs.Servers[keyToServerMapping].Port
 			peerAddr := scs.Servers[keyToServerMapping].Host
@@ -242,9 +210,6 @@ func main() {
 			conn, err = connectToSocket(addr)
 			checkError(err)
 			openConnections[keyToServerMapping] = conn
-		}
-		if connExists {
-			// fmt.Println(serId, " Connection already exists")
 		}
 		// Write 1 byte boolean
 		var streamComplete byte = 0
@@ -260,36 +225,22 @@ func main() {
 		if err != nil {
 			log.Fatalf("Fail writing conn.write key Fatal error: %s", err.Error())
 		}
-
-		// Write 90 bytes value
-		_, err = conn.Write([]byte(value[:]))
-		// checkError(err)
-		// fmt.Println(serId, " Sent 101 bytes")
-		if err != nil {
-			log.Fatalf("Fail writing conn.write value Fatal error: %s", err.Error())
-		}
-		// fmt.Println(serId, "Sent 101 bytes")
 	}
-	// fmt.Println(serId, " Finished reading records in the file")
+
 	time.Sleep(1000 * time.Millisecond)
 	for _, conn := range openConnections {
-		var key [10]byte
-		var value [90]byte
+		var key [4]byte
 		var streamComplete byte = 1
 		_, err = conn.Write([]byte{streamComplete})
 
-		// Write 10 bytes key
+		// Write 4 bytes key
 		_, err = conn.Write([]byte(key[:]))
-
-		// Write 90 bytes value
-		_, err = conn.Write([]byte(value[:]))
 		conn.Close()
 	}
 	for i := 0; i < len(othersDataChannel); i++ {
 		for rec := range othersDataChannel[i] {
 			records = append(records, rec)
 		}
-		// fmt.Println(serId, " Completed reading channel ", i)
 	}
 	
 	// Close input file
@@ -305,7 +256,6 @@ func main() {
 		}
 		return false
 	})
-	// fmt.Println(serId, "records sorted");
 	// Write to output file
 
 	// Read write file name

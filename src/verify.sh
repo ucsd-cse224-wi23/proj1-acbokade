@@ -3,8 +3,8 @@ rm INPUT
 rm OUTPUT 
 rm REF_OUTPUT
 rm my_output
-./run-demo-4.sh
-N=3
+./run-demo-16.sh 
+N=15
 cp testcases/testcase1/input-0.dat INPUT 
 for i in $(seq 1 ${N})
 do
