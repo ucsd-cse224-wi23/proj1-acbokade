@@ -63,7 +63,7 @@ func checkErrorWithExit(err error) {
 
 func checkErrorWithoutExit(err error) {
 	if err != nil {
-		log.Println("Error: %s", err)
+		log.Printf("Error: %s\n", err)
 	}
 }
 
@@ -255,12 +255,15 @@ func main() {
 		var streamComplete byte = 1
 		// Write 1 byte to indicate stream completion
 		_, err = conn.Write([]byte{streamComplete})
+		checkErrorWithExit(err)
 
 		// Write 10 bytes key
 		_, err = conn.Write([]byte(key[:]))
+		checkErrorWithExit(err)
 
 		// Write 90 bytes value
 		_, err = conn.Write([]byte(value[:]))
+		checkErrorWithExit(err)
 		// defer conn.Close()
 	}
 
