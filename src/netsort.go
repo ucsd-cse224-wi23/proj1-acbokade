@@ -156,6 +156,9 @@ func main() {
 
 	// Read server configs from file
 	scs := readServerConfigs(os.Args[4])
+	sort.Slice(scs.Servers, func(i, j int) bool {
+		return scs.Servers[i].ServerId <= scs.Servers[j].ServerId
+	})
 	nServers = len(scs.Servers)
 
 	// Read the port and address of own server
