@@ -1,0 +1,4 @@
+2023/01/27 17:54:07 netsort.go:67: Fatal error: listen tcp 127.0.0.1:8082: bind: address already in use
+2023/01/27 17:54:07 netsort.go:67: Fatal error: listen tcp 127.0.0.1:8083: bind: address already in use
+2023/01/27 17:54:07 netsort.go:67: Fatal error: listen tcp 127.0.0.1:8080: bind: address already in use
+2023/01/27 17:54:07 netsort.go:67: Fatal error: listen tcp 127.0.0.1:8081: bind: address already in use

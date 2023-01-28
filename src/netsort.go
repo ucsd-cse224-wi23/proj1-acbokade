@@ -1,5 +1,6 @@
 package main
 
+// Imports
 import (
 	"bytes"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v2"
@@ -26,12 +28,17 @@ type record struct {
 	Value [90]byte
 }
 
-var nServers int // number of servers as defined in the config.yaml file
-var openClientConnections []net.Conn  // open connections with the clients
+var nServers int  // number of servers as defined in the config.yaml file
+var openClientConnections []net.Conn // open connections with the clients
 
 // Contains the channel corresponding to each other node where
 // this server intend to receive the data from
-var othersDataChannel []chan record = make([]chan record, 0) 
+var othersDataChannel []chan record
+// Slice of records received from other nodes
+var othersDataRecords []record
+// WaitGroup which is used to synchorize main thread and the goroutine
+// which collects the data received from other nodes (collectOthersDataFromChannel())
+var collectedOthersDataWg sync.WaitGroup
 
 type ServerConfigs struct {
 	Servers []struct {
@@ -57,7 +64,7 @@ func readServerConfigs(configPath string) ServerConfigs {
 
 func checkErrorWithExit(err error) {
 	if err != nil {
-		log.Fatalf("Fatal error: %s", err)
+		log.Fatalf("Fatal error: %s\n", err)
 	}
 }
 
@@ -90,7 +97,11 @@ func connectToSocket(addr string) (net.Conn, error) {
 // appends a channel for that node to othersDataChannel
 func acceptConnections(listener net.Listener) {
 	for {
-		if len(openClientConnections) == nServers - 1 {
+		// When all other nodes are connected, then invoke
+		// method to collect data sent from these nodes to the 
+		// respective channels and terminate this go-routine
+		if len(openClientConnections) == nServers-1 {
+			go collectOthersDataFromChannel()
 			break
 		}
 		conn, err := listener.Accept()
@@ -98,8 +109,8 @@ func acceptConnections(listener net.Listener) {
 		openClientConnections = append(openClientConnections, conn)
 		if err == nil {
 			ch := make(chan record)
-			othersDataChannel = append(othersDataChannel, ch)
 			// Create a channel for the client
+			othersDataChannel = append(othersDataChannel, ch)
 			go receiveData(conn, ch)
 		}
 	}
@@ -141,6 +152,18 @@ func receiveData(conn net.Conn, othersData chan<- record) {
 	}
 }
 
+// Function which collects the received data 
+// stored in the respective channels of other nodes 
+func collectOthersDataFromChannel() {
+	for i := 0; i < len(othersDataChannel); i++ {
+		for rec := range othersDataChannel[i] {
+			othersDataRecords = append(othersDataRecords, rec)
+		}
+	}
+	// Signal
+	collectedOthersDataWg.Done()
+}
+
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
@@ -172,6 +195,10 @@ func main() {
 	listener, err := net.Listen(PROT, addr)
 	checkErrorWithExit(err)
 	defer listener.Close()
+
+	// Initialize the collectOthersDataWg semaphore with 1
+	collectedOthersDataWg.Add(1)
+
 	go acceptConnections(listener)
 	// Wait for some time so that other nodes can establish the listener socket
 	// and accepting connections
@@ -197,12 +224,9 @@ func main() {
 		openConnections[i] = conn
 		defer conn.Close()
 	}
-	// Wait for some time so that other nodes can establish the listener socket
-	// and accepting connections
-	time.Sleep(1000 * time.Millisecond)
 
-	// Declare records array which will store individual record
-	records := []record{}
+	// Slice containing own records read from the input file
+	ownRecords := []record{}
 	for {
 		var key [10]byte
 		var value [90]byte
@@ -225,7 +249,7 @@ func main() {
 		firstByte := key[0]
 		keyToServerMapping := int(firstByte) >> (8 - nMSB)
 		if keyToServerMapping == serverId {
-			records = append(records, record{key, value})
+			ownRecords = append(ownRecords, record{key, value})
 			continue
 		}
 		conn, connExists := openConnections[keyToServerMapping]
@@ -250,7 +274,6 @@ func main() {
 		checkErrorWithExit(err)
 	}
 
-	time.Sleep(1000 * time.Millisecond)
 
 	for _, conn := range openConnections {
 		var key [10]byte
@@ -270,15 +293,17 @@ func main() {
 		// defer conn.Close()
 	}
 
-	// Append records from all the sender nodes' channels
-	for i := 0; i < len(othersDataChannel); i++ {
-		for rec := range othersDataChannel[i] {
-			records = append(records, rec)
-		}
-	}
-
 	// Close input file
 	inputFile.Close()
+
+	// Declare records array which will store individual records
+	records := []record{}
+	// Append own records
+	records = append(records, ownRecords...)
+	// Wait for collectOthersDataFromChannel method
+	collectedOthersDataWg.Wait()
+	// Append own and others records
+	records = append(records, othersDataRecords...)
 
 	// Sort the data
 	// Custom comparator for sorting records array by key
